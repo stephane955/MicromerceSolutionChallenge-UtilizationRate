@@ -3,9 +3,12 @@ import {
   useMaterialReactTable,
   type MRT_ColumnDef,
 } from "material-react-table";
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import sourceData from "./source-data.json";
 import type { SourceDataType, TableDataType } from "./types";
+import Papa from 'papaparse';
+import { saveAs } from "file-saver";
+
 
 /**
  * Example of how a tableData object should be structured.
@@ -20,65 +23,167 @@ import type { SourceDataType, TableDataType } from "./types";
  * @prop {number} netEarningsPrevMonth - The net earnings for the previous month.
  */
 
-const tableData: TableDataType[] = (
-  sourceData as unknown as SourceDataType[]
-).map((dataRow, index) => {
-  const person = `${dataRow?.employees?.firstname} - ...`;
+// Utility: parse string as number
+const parseUtil = (val?: string) =>
+    val !== undefined ? parseFloat(val) : undefined;
 
-  const row: TableDataType = {
-    person: `${person}`,
-    past12Months: `past12Months ${index} placeholder`,
-    y2d: `y2d ${index} placeholder`,
-    may: `may ${index} placeholder`,
-    june: `june ${index} placeholder`,
-    july: `july ${index} placeholder`,
-    netEarningsPrevMonth: `netEarningsPrevMonth ${index} placeholder`,
-  };
+// Utility: extract month from utilisation data
+const getMonthUtil = (util: any, month: string) =>
+    parseUtil(
+        util?.lastThreeMonthsIndividually?.find((m: any) => m.month === month)
+            ?.utilisationRate
+    );
 
-  return row;
-});
+// CSV export function
+const handleExport = (data: TableDataType[]) => {
+    const csv = Papa.unparse(data);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    saveAs(blob, "workforce-dashboard.csv");
+};
 
 const Example = () => {
-  const columns = useMemo<MRT_ColumnDef<TableDataType>[]>(
-    () => [
-      {
-        accessorKey: "person",
-        header: "Person",
-      },
-      {
-        accessorKey: "past12Months",
-        header: "Past 12 Months",
-      },
-      {
-        accessorKey: "y2d",
-        header: "Y2D",
-      },
-      {
-        accessorKey: "may",
-        header: "May",
-      },
-      {
-        accessorKey: "june",
-        header: "June",
-      },
-      {
-        accessorKey: "july",
-        header: "July",
-      },
-      {
-        accessorKey: "netEarningsPrevMonth",
-        header: "Net Earnings Prev Month",
-      },
-    ],
-    []
-  );
+    const [loading, setLoading] = useState(true);
+    const [tableData, setTableData] = useState<TableDataType[]>([]);
 
-  const table = useMaterialReactTable({
-    columns,
-    data: tableData,
-  });
+    // Simulate loading
+    useEffect(() => {
+        const loadData = () => {
+            const data: TableDataType[] = (
+                sourceData as unknown as SourceDataType[]
+            )
+                .filter(
+                    (row) =>
+                        row.employees?.status === "active" ||
+                        row.externals?.status === "active"
+                )
+                .map((row) => {
+                    const personData = row.employees ?? row.externals;
+                    const util = personData?.workforceUtilisation;
+                    const name =
+                        personData?.jobType === "external"
+                            ? `External ${personData.firstname} ${personData.lastname ?? ""}`
+                            : `${personData.firstname} ${personData.lastname ?? ""}`;
 
-  return <MaterialReactTable table={table} />;
+                    return {
+                        person: name,
+                        past12Months: parseUtil(util?.utilisationRateLastTwelveMonths),
+                        y2d: parseUtil(util?.utilisationRateYearToDate),
+                        may: getMonthUtil(util, "May"),
+                        june: getMonthUtil(util, "June"),
+                        july: getMonthUtil(util, "July"),
+                        netEarningsPrevMonth: parseUtil(util?.monthlyCostDifference) ?? 0,
+                    };
+                });
+            setTableData(data);
+            setLoading(false);
+        };
+
+        setTimeout(loadData, 1000); // simulate delay
+    }, []);
+
+    const columns = useMemo<MRT_ColumnDef<TableDataType>[]>(() => [
+        {
+            accessorKey: "person",
+            header: "Person",
+            enableSorting: true,
+        },
+        {
+            accessorKey: "past12Months",
+            header: "Past 12 Months",
+            enableSorting: true,
+            Cell: ({ cell }) =>
+                cell.getValue<number | undefined>() != null
+                    ? `${(cell.getValue<number>() * 100).toFixed(0)}%`
+                    : "-",
+        },
+        {
+            accessorKey: "y2d",
+            header: "Y2D",
+            enableSorting: true,
+            Cell: ({ cell }) =>
+                cell.getValue<number | undefined>() != null
+                    ? `${(cell.getValue<number>() * 100).toFixed(0)}%`
+                    : "-",
+        },
+        {
+            accessorKey: "may",
+            header: "May",
+            enableSorting: true,
+            Cell: ({ cell }) =>
+                cell.getValue<number | undefined>() != null
+                    ? `${(cell.getValue<number>() * 100).toFixed(0)}%`
+                    : "-",
+        },
+        {
+            accessorKey: "june",
+            header: "June",
+            enableSorting: true,
+            Cell: ({ cell }) =>
+                cell.getValue<number | undefined>() != null
+                    ? `${(cell.getValue<number>() * 100).toFixed(0)}%`
+                    : "-",
+        },
+        {
+            accessorKey: "july",
+            header: "July",
+            enableSorting: true,
+            Cell: ({ cell }) =>
+                cell.getValue<number | undefined>() != null
+                    ? `${(cell.getValue<number>() * 100).toFixed(0)}%`
+                    : "-",
+        },
+        {
+            accessorKey: "netEarningsPrevMonth",
+            header: "Net Earnings Prev Month",
+            enableSorting: true,
+            Cell: ({ cell }) => {
+                const value = cell.getValue<number>();
+                const formatted = new Intl.NumberFormat("de-DE", {
+                    style: "currency",
+                    currency: "EUR",
+                    maximumFractionDigits: 0,
+                }).format(value);
+                return (
+                    <span style={{ color: value >= 0 ? "green" : "red" }}>{formatted}</span>
+                );
+            },
+        },
+    ], []);
+
+    const table = useMaterialReactTable({
+        columns,
+        data: tableData,
+        enableStickyHeader: true,
+        initialState: {
+            density: "compact",
+        },
+        state: {
+            isLoading: loading,
+        },
+    });
+
+    return (
+        <div style={{ padding: "1rem" }}>
+            <h2>💼 Workforce Management Dashboard</h2>
+            <button
+                onClick={() => handleExport(tableData)}
+                style={{
+                    marginBottom: "1rem",
+                    background: "#1976d2",
+                    color: "white",
+                    padding: "0.5rem 1rem",
+                    borderRadius: "4px",
+                    border: "none",
+                    cursor: "pointer",
+                }}
+                disabled={loading}
+            >
+                Export CSV
+            </button>
+            <MaterialReactTable table={table} />
+        </div>
+    );
 };
 
 export default Example;
+
