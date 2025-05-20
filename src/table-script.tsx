@@ -164,7 +164,7 @@ const Example = () => {
 
     return (
         <div style={{ padding: "1rem" }}>
-            <h2>💼 Workforce Management Dashboard</h2>
+            <h2>Workforce Management Dashboard</h2>
             <button
                 onClick={() => handleExport(tableData)}
                 style={{
